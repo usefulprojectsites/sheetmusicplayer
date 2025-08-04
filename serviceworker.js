@@ -4,7 +4,7 @@ const FILES_TO_CACHE = [
   '/index.html',
   '/manifest.json',
   '/service-worker.js',
-  '/libs/opensheetmusicdisplay.min.js',
+  'opensheetmusicdisplay.min.js',
   'https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js'
 ];
 
@@ -33,3 +33,4 @@ self.addEventListener('fetch', event => {
     )
   );
 });
+
