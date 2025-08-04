@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sheet Music Player</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1e3a8a" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(to bottom right, #1e3a8a, #3b82f6);
+      margin: 0;
+      padding: 0;
+      color: #1f2937;
+    }
+    .container {
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 2rem;
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    .file-upload, .controls {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+      align-items: center;
+    }
+    .file-upload input[type="file"] {
+      padding: 0.5rem;
+      border: 1px solid #cbd5e0;
+      border-radius: 0.5rem;
+    }
+    .file-upload select, .controls button, .controls input[type=range] {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      font-size: 1rem;
+    }
+    .controls button {
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    #sheet-container {
+      border: 1px solid #e2e8f0;
+      border-radius: 1rem;
+      padding: 1rem;
+      background: #f7fafc;
+      overflow: auto;
+      height: 500px;
+    }
+    .highlight-measure {
+      stroke: orange !important;
+      stroke-width: 4 !important;
+      stroke-opacity: 0.5 !important;
+      fill-opacity: 0.2 !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 style="text-align:center; font-size: 2rem; font-weight: 800; color: #1e3a8a; margin-bottom: 1.5rem;">🎼 AI Sheet Music Player</h1>
+
+    <div class="file-upload">
+      <input type="file" id="file-input" accept=".musicxml,.xml,.mxl">
+      <select id="instrument-select">
+        <option value="acoustic_grand_piano">🎹 Piano</option>
+        <option value="violin">🎻 Violin</option>
+        <option value="flute">🎶 Flute</option>
+        <option value="acoustic_guitar_nylon">🎸 Guitar</option>
+        <option value="soprano_sax">🎷 Saxophone</option>
+        <option value="trombone">🦴 Trombone</option>
+        <option value="cello">🎻 Cello</option>
+      </select>
+      <label for="speed-range">Speed: <span id="speed-display">120 BPM</span></label>
+      <input type="range" id="speed-range" min="30" max="240" value="120" step="1">
+    </div>
+
+    <div class="controls">
+      <button id="play-btn" style="background-color: #22c55e; color: white;">▶️ Play</button>
+      <button id="stop-btn" style="background-color: #ef4444; color: white;">⏹ Stop</button>
+    </div>
+
+    <div id="sheet-container"></div>
+  </div>
+
+  <script src="libs/opensheetmusicdisplay.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+  <script>
+    let lastCursorIndex = 0;
+    let currentInstrument = null;
+    let osmd = null;
+    let playing = false;
+    let audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    let playTimer = null;
+
+    window.addEventListener("load", function () {
+      const fileInput = document.getElementById("file-input");
+      const container = document.getElementById("sheet-container");
+      const playBtn = document.getElementById("play-btn");
+      const stopBtn = document.getElementById("stop-btn");
+      const instrumentSelect = document.getElementById("instrument-select");
+      const speedRange = document.getElementById("speed-range");
+      const speedDisplay = document.getElementById("speed-display");
+
+      speedRange.addEventListener("input", () => {
+        speedDisplay.textContent = `${speedRange.value} BPM`;
+      });
+
+      async function loadInstrument(name) {
+        return await window.Soundfont.instrument(audioContext, name);
+      }
+
+      fileInput.addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          let content = e.target.result;
+          if (file.name.endsWith(".mxl")) {
+            content = new Uint8Array(content);
+          }
+          osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(container, {
+            drawTitle: true,
+            drawPartNames: true,
+            drawFingerings: true,
+            drawMeasureNumbers: true,
+            drawSubtitle: true,
+            followCursor: true
+          });
+          await osmd.load(content);
+          osmd.render();
+        };
+
+        if (file.name.endsWith(".mxl")) {
+          reader.readAsArrayBuffer(file);
+        } else {
+          reader.readAsText(file);
+        }
+      });
+
+      playBtn.addEventListener("click", async () => {
+        if (!osmd || !osmd.cursor) {
+          alert("No music loaded yet.");
+          return;
+        }
+
+        currentInstrument = await loadInstrument(instrumentSelect.value);
+        const cursor = osmd.cursor;
+        cursor.show();
+        cursor.reset();
+        for (let i = 0; i < lastCursorIndex; i++) cursor.next();
+
+        playing = true;
+
+        async function playStep() {
+          if (!playing || cursor.iterator.endReached) {
+            lastCursorIndex = 0;
+            cursor.reset();
+            cursor.hide();
+            return;
+          }
+
+          const bpm = parseFloat(speedRange.value);
+          const duration = (60000 / bpm);
+
+          const voices = cursor.iterator.CurrentVoiceEntries;
+          const measureIndex = cursor.iterator.CurrentMeasureIndex;
+          document.querySelectorAll('.highlight-measure').forEach(el => el.classList.remove('highlight-measure'));
+          const svgMeasure = container.querySelector(`g[id^='measure'][id$='-${measureIndex}']`);
+          if (svgMeasure) svgMeasure.classList.add('highlight-measure');
+
+          for (const voice of voices) {
+            for (const note of voice.Notes) {
+              if (!note.isRest()) {
+                const pitch = note.halfTone;
+                const midi = pitch + 12;
+                const noteName = midiToNoteName(midi);
+                currentInstrument.play(noteName, audioContext.currentTime, { duration: duration / 1000 });
+              }
+            }
+          }
+
+          cursor.next();
+          lastCursorIndex++;
+          playTimer = setTimeout(playStep, duration);
+        }
+
+        playStep();
+      });
+
+      stopBtn.addEventListener("click", () => {
+        playing = false;
+        clearTimeout(playTimer);
+        document.querySelectorAll('.highlight-measure').forEach(el => el.classList.remove('highlight-measure'));
+        if (osmd && osmd.cursor) osmd.cursor.hide();
+      });
+
+      function midiToNoteName(midi) {
+        const octave = Math.floor(midi / 12) - 1;
+        const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        return `${noteNames[midi % 12]}${octave}`;
+      }
+    });
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js').then(reg => {
+          console.log('Service worker registered.', reg);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
