@@ -1,179 +1,235 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Sheet Music Trainer</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-<style>
-body { font-family:'Inter',sans-serif; margin:0; background: linear-gradient(to bottom right,#1e3a8a,#3b82f6); color:#1f2937;}
-.container { max-width:960px; margin:2rem auto; padding:2rem; background:#fff; border-radius:1rem; box-shadow:0 10px 25px rgba(0,0,0,0.15);}
-.file-upload, .controls { display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem; align-items:center;}
-input[type=file], select, button, input[type=range] { padding:0.5rem 1rem; border-radius:0.5rem; font-weight:600; font-size:1rem; border:1px solid #cbd5e0;}
-button { cursor:pointer; transition:0.2s;}
-#sheet-container { border:1px solid #e2e8f0; border-radius:1rem; padding:1rem; background:#f7fafc; overflow:auto; height:500px;}
-.highlight-measure { fill: rgba(255,165,0,0.2) !important; }
-.highlight-note { fill: rgba(255,140,0,0.7) !important; }
-@media(max-width:600px){ #sheet-container{height:350px;} .file-upload, .controls{flex-direction:column; align-items:stretch;} }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Sheet Music Player</title>
+  <meta name="description" content="Play and learn MusicXML sheet music with MIDI feedback, highlights, and adjustable BPM.">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/opensheetmusicdisplay/1.7.0/opensheetmusicdisplay.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/opensheetmusicdisplay/1.7.0/opensheetmusicdisplay.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.15.1/dist/soundfont-player.min.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(to bottom right, #1e3a8a, #3b82f6);
+      margin: 0;
+      padding: 0;
+      color: #1f2937;
+    }
+    .container {
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 2rem;
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    .file-upload, .controls {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+      align-items: center;
+    }
+    .file-upload input[type="file"], .file-upload select, .controls button, .controls input[type=range] {
+      padding: 0.5rem 1rem;
+      border: 1px solid #cbd5e0;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      font-size: 1rem;
+    }
+    .controls button {
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    #sheet-container {
+      border: 1px solid #e2e8f0;
+      border-radius: 1rem;
+      padding: 1rem;
+      background: #f7fafc;
+      overflow-x: auto;
+      height: 500px;
+    }
+    .highlight-measure {
+      stroke: orange !important;
+      stroke-width: 4 !important;
+      stroke-opacity: 0.3 !important;
+      fill-opacity: 0.1 !important;
+    }
+    .highlight-note {
+      fill: orange !important;
+      stroke: orange !important;
+      stroke-width: 1 !important;
+      fill-opacity: 0.3 !important;
+    }
+  </style>
 </head>
 <body>
-<div class="container">
-<h1 style="text-align:center; font-size:2rem; font-weight:800; color:#1e3a8a; margin-bottom:1.5rem;">🎼 AI Sheet Music Trainer</h1>
+  <div class="container">
+    <h1 style="text-align:center; font-size: 2rem; font-weight: 800; color: #1e3a8a; margin-bottom: 1.5rem;">🎼 AI Sheet Music Player</h1>
 
-<div class="file-upload">
-<input type="file" id="file-input" accept=".musicxml,.xml,.mxl">
-<select id="instrument-select">
-<option value="acoustic_grand_piano">🎹 Piano</option>
-<option value="violin">🎻 Violin</option>
-<option value="flute">🎶 Flute</option>
-<option value="acoustic_guitar_nylon">🎸 Guitar</option>
-<option value="soprano_sax">🎷 Saxophone</option>
-<option value="trombone">🦴 Trombone</option>
-<option value="cello">🎻 Cello</option>
-</select>
-<label>Speed: <span id="speed-display">120 BPM</span></label>
-<input type="range" id="speed-range" min="30" max="240" value="120" step="1">
-<label><input type="checkbox" id="listen-toggle" checked> Listen Mode</label>
-</div>
+    <div class="file-upload">
+      <input type="file" id="file-input" accept=".musicxml,.xml,.mxl">
+      <select id="instrument-select">
+        <option value="acoustic_grand_piano">🎹 Piano</option>
+        <option value="violin">🎻 Violin</option>
+        <option value="flute">🎶 Flute</option>
+        <option value="acoustic_guitar_nylon">🎸 Guitar</option>
+        <option value="soprano_sax">🎷 Saxophone</option>
+        <option value="trombone">🎺 Trombone</option>
+        <option value="cello">🎻 Cello</option>
+      </select>
+      <label for="speed-range">BPM: <span id="speed-display">120</span></label>
+      <input type="range" id="speed-range" min="30" max="240" value="120">
+      <label><input type="checkbox" id="training-toggle"> Training Mode</label>
+    </div>
 
-<div class="controls">
-<button id="play-btn" style="background-color:#22c55e;color:white;">▶️ Play</button>
-<button id="stop-btn" style="background-color:#ef4444;color:white;">⏹ Stop</button>
-</div>
+    <div class="controls">
+      <button id="play-btn" style="background-color: #22c55e; color: white;">▶️ Play</button>
+      <button id="stop-btn" style="background-color: #ef4444; color: white;">⏹ Stop</button>
+    </div>
 
-<div id="sheet-container"></div>
-</div>
+    <div id="sheet-container"></div>
+  </div>
 
-<!-- Libraries -->
-<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@0.9.11/build/opensheetmusicdisplay.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+  <script>
+    let osmd;
+    let audioContext;
+    let instrumentPlayer;
+    let noteSequence = [];
+    let currentNoteIndex = 0;
+    let playing = false;
+    let bpm = 120;
+    let trainingMode = false;
 
-<script>
-let osmd, audioContext, currentInstrument, cursor;
-let bpm=120, listenMode=true, playing=false;
-let midiAccess, pressedNotes = new Set();
+    const fileInput = document.getElementById("file-input");
+    const sheetContainer = document.getElementById("sheet-container");
+    const playBtn = document.getElementById("play-btn");
+    const stopBtn = document.getElementById("stop-btn");
+    const instrumentSelect = document.getElementById("instrument-select");
+    const speedRange = document.getElementById("speed-range");
+    const speedDisplay = document.getElementById("speed-display");
+    const trainingToggle = document.getElementById("training-toggle");
 
-const fileInput=document.getElementById("file-input");
-const instrumentSelect=document.getElementById("instrument-select");
-const playBtn=document.getElementById("play-btn");
-const stopBtn=document.getElementById("stop-btn");
-const speedRange=document.getElementById("speed-range");
-const speedDisplay=document.getElementById("speed-display");
-const listenToggle=document.getElementById("listen-toggle");
-const sheetContainer=document.getElementById("sheet-container");
-
-speedRange.addEventListener("input", ()=>{
-  bpm=parseInt(speedRange.value);
-  speedDisplay.textContent=bpm+" BPM";
-});
-
-listenToggle.addEventListener("change", ()=>{ listenMode=listenToggle.checked; });
-
-async function loadInstrument(name){
-  if(!audioContext) audioContext = new (window.AudioContext||window.webkitAudioContext)();
-  currentInstrument = await Soundfont.instrument(audioContext,name);
-}
-
-fileInput.addEventListener("change", async e=>{
-  const file=e.target.files[0];
-  if(!file) return;
-  const reader=new FileReader();
-  reader.onload=async evt=>{
-    let content=evt.target.result;
-    osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(sheetContainer,{drawingParameters:'compact'});
-    try{
-      await osmd.load(content);
-      await osmd.render();
-      cursor=osmd.cursor;
-      cursor.reset();
-      cursor.show();
-    }catch(err){ alert("Error loading sheet music: "+err); }
-  };
-  if(file.name.endsWith(".mxl")) reader.readAsArrayBuffer(file);
-  else reader.readAsText(file);
-});
-
-// MIDI setup
-async function initMIDI(){
-  if(navigator.requestMIDIAccess){
-    midiAccess = await navigator.requestMIDIAccess();
-    midiAccess.inputs.forEach(input=>{
-      input.onmidimessage = handleMIDI;
+    speedRange.addEventListener('input', () => {
+      bpm = parseInt(speedRange.value);
+      speedDisplay.textContent = bpm;
     });
-  }
-}
-function handleMIDI(e){
-  const [status, note, velocity] = e.data;
-  if(status===144 && velocity>0){ // note on
-    pressedNotes.add(note);
-    checkNote(note);
-  } else if(status===128 || (status===144 && velocity===0)){ // note off
-    pressedNotes.delete(note);
-  }
-}
 
-function checkNote(note){
-  if(!cursor || !osmd) return;
-  let notes = cursor.NotesUnderCursor||[];
-  let midiNotes = notes.map(n=>n.halfTone+12);
-  if(midiNotes.includes(note)){
-    // correct note pressed
-    highlightCursor(true);
-    if(listenMode && currentInstrument) currentInstrument.play(midiToNoteName(note), audioContext.currentTime, {duration: 60/bpm});
-    cursor.next();
-    if(cursor.Iterator.EndReached) playing=false;
-  }
-}
-
-// Playback loop
-playBtn.addEventListener("click", async ()=>{
-  if(!osmd || !cursor) return;
-  if(!currentInstrument) await loadInstrument(instrumentSelect.value);
-  playing=true;
-  cursor.reset(); cursor.show();
-  const interval=60000/bpm;
-
-  async function step(){
-    if(!playing || cursor.Iterator.EndReached){ playing=false; return; }
-    highlightCursor(false);
-    if(!listenMode && currentInstrument){
-      const notes=cursor.NotesUnderCursor||[];
-      notes.forEach(n=> currentInstrument.play(midiToNoteName(n.halfTone+12), audioContext.currentTime, {duration: 60/bpm}));
-    }
-    if(listenMode){
-      // wait for MIDI notes
-    } else {
-      cursor.next();
-    }
-    setTimeout(step, interval);
-  }
-  step();
-});
-
-stopBtn.addEventListener("click", ()=>{ playing=false; });
-
-function highlightCursor(correct=false){
-  osmd.GraphicSheet.MeasureList.forEach(m=>{
-    m.backgroundColor=null;
-    m.graphicalNotes.forEach(n=> n.noteheadColor=null);
-  });
-  if(cursor.Measure) cursor.Measure.backgroundColor='rgba(255,165,0,0.2)';
-  if(cursor.NotesUnderCursor){
-    cursor.NotesUnderCursor.forEach(n=>{
-      n.noteheadColor = correct ? 'rgba(255,140,0,0.7)' : 'rgba(255,165,0,0.4)';
+    trainingToggle.addEventListener('change', () => {
+      trainingMode = trainingToggle.checked;
     });
-  }
-  osmd.render();
-}
 
-function midiToNoteName(midi){
-  const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-  return names[midi%12]+(Math.floor(midi/12)-1);
-}
+    async function loadInstrument(name) {
+      if(!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      instrumentPlayer = await Soundfont.instrument(audioContext, name);
+    }
 
-// initialize MIDI input
-initMIDI();
-</script>
+    async function loadSheet(file) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        let content = e.target.result;
+        if(osmd) sheetContainer.innerHTML = ""; // clear
+        osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(sheetContainer, {autoResize: true});
+        await osmd.load(content);
+        osmd.render();
+        extractNoteSequence();
+      };
+      if(file.name.endsWith(".mxl")) reader.readAsArrayBuffer(file);
+      else reader.readAsText(file);
+    }
+
+    fileInput.addEventListener("change", async (e) => {
+      if(e.target.files.length > 0) await loadSheet(e.target.files[0]);
+    });
+
+    function extractNoteSequence() {
+      noteSequence = [];
+      osmd.GraphicSheet.MeasureList.forEach((measure, measureIndex) => {
+        measure.Voices.forEach(voice => {
+          voice.Notes.forEach(note => {
+            if(!note.isRest()) {
+              noteSequence.push({
+                pitch: note.halfTone,
+                startTime: 0, // we’ll calculate relative BPM timing later
+                duration: 60 / bpm, 
+                measureIndex,
+                noteObj: note
+              });
+            }
+          });
+        });
+      });
+    }
+
+    function highlightNoteAndMeasure(index) {
+      osmd.GraphicSheet.MeasureList.forEach((m, mi) => {
+        const svg = m.MeasureSVG;
+        if(svg) {
+          if(mi === noteSequence[index].measureIndex) svg.classList.add("highlight-measure");
+          else svg.classList.remove("highlight-measure");
+        }
+      });
+      const note = noteSequence[index].noteObj;
+      if(note && note.MIDINoteNumber) {
+        // OSMD SVG notes highlighting
+        if(note.parent) note.parent.svgElement.classList.add("highlight-note");
+      }
+    }
+
+    async function playSequence(startIndex=0) {
+      if(!instrumentPlayer) await loadInstrument(instrumentSelect.value);
+      playing = true;
+      currentNoteIndex = startIndex;
+
+      function nextNote() {
+        if(!playing || currentNoteIndex >= noteSequence.length) return;
+        const note = noteSequence[currentNoteIndex];
+        highlightNoteAndMeasure(currentNoteIndex);
+        const noteName = midiToNoteName(note.pitch + 12); // adjust octave
+        if(!trainingMode) instrumentPlayer.play(noteName, audioContext.currentTime, {duration: note.duration});
+        currentNoteIndex++;
+        if(!trainingMode) setTimeout(nextNote, note.duration * 1000 * (120/bpm));
+      }
+
+      nextNote();
+    }
+
+    function stopSequence() {
+      playing = false;
+      currentNoteIndex = 0;
+      osmd.GraphicSheet.MeasureList.forEach(m => {
+        if(m.MeasureSVG) m.MeasureSVG.classList.remove("highlight-measure");
+      });
+    }
+
+    function midiToNoteName(midi) {
+      const octave = Math.floor(midi/12)-1;
+      const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+      return `${names[midi%12]}${octave}`;
+    }
+
+    playBtn.addEventListener("click", () => playSequence(currentNoteIndex));
+    stopBtn.addEventListener("click", stopSequence);
+
+    // MIDI support
+    if(navigator.requestMIDIAccess) {
+      navigator.requestMIDIAccess().then((midiAccess) => {
+        midiAccess.inputs.forEach(input => {
+          input.onmidimessage = (msg) => {
+            const [command, noteNumber, velocity] = msg.data;
+            if(command === 144 && velocity>0 && trainingMode) { // note on
+              const expected = noteSequence[currentNoteIndex];
+              if(expected && noteNumber === expected.pitch+60) { // adjust octave
+                instrumentPlayer.play(midiToNoteName(expected.pitch+12), audioContext.currentTime, {duration: expected.duration});
+                currentNoteIndex++;
+                if(currentNoteIndex<noteSequence.length) highlightNoteAndMeasure(currentNoteIndex);
+              }
+            }
+          };
+        });
+      });
+    }
+  </script>
 </body>
 </html>
