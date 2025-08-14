@@ -112,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const speedRange = document.getElementById("speed-range");
   const speedDisplay = document.getElementById("speed-display");
 
-  let osmd = new opensheetmusicdisplay.OSMD(osmdContainer, {autoResize: true});
+  let osmd = new OSMD.OSMD(osmdContainer, {autoResize: true}); // <--- use OSMD.OSMD
   let audioContext = new (window.AudioContext || window.webkitAudioContext)();
   let instrument = null;
   let sequence = [];
@@ -183,7 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
     playing = true;
     while (currentNoteIndex < sequence.length && playing) {
       await playNote(sequence[currentNoteIndex]);
-      await new Promise(r => setTimeout(r, 60000 / playbackSpeed)); // simple BPM timing
+      await new Promise(r => setTimeout(r, 60000 / playbackSpeed));
       currentNoteIndex++;
     }
     playing = false;
@@ -199,5 +199,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 </script>
+
 </body>
 </html>
