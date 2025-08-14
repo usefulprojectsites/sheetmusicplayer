@@ -3,202 +3,148 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Sheet Music Player</title>
-<meta name="description" content="Play and visualize sheet music using MusicXML files. Adjust playback speed and instrument, highlight measures, and enjoy offline support.">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1e3a8a" />
+<title>AI Sheet Music Player with MIDI Training</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-
 <style>
-body {
-  font-family: 'Inter', sans-serif;
-  background: linear-gradient(to bottom right, #1e3a8a, #3b82f6);
-  margin: 0;
-  padding: 0;
-  color: #1f2937;
-}
-.container {
-  max-width: 960px;
-  margin: 2rem auto;
-  padding: 2rem;
-  background: white;
-  border-radius: 1rem;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-}
-.file-upload, .controls {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.5rem;
-  align-items: center;
-}
-.file-upload input[type="file"] {
-  padding: 0.5rem;
-  border: 1px solid #cbd5e0;
-  border-radius: 0.5rem;
-}
-.file-upload select, .controls button, .controls input[type=range] {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  font-size: 1rem;
-}
-.controls button {
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-#sheet-container {
-  border: 1px solid #e2e8f0;
-  border-radius: 1rem;
-  padding: 1rem;
-  background: #f7fafc;
-  overflow-x: auto;
-  overflow-y: auto;
-  height: 500px;
-}
-.highlight-measure {
-  stroke: orange !important;
-  stroke-width: 4 !important;
-  stroke-opacity: 0.5 !important;
-  fill-opacity: 0.2 !important;
-}
-.highlight-note {
-  stroke: orange !important;
-  stroke-width: 3 !important;
-  stroke-opacity: 0.8 !important;
-  fill-opacity: 0.4 !important;
-}
+  body { font-family: 'Inter', sans-serif; background: linear-gradient(to bottom right, #1e3a8a, #3b82f6); margin:0; padding:0; color:#1f2937;}
+  .container { max-width:960px; margin:2rem auto; padding:2rem; background:white; border-radius:1rem; box-shadow:0 10px 25px rgba(0,0,0,0.15);}
+  .file-upload, .controls { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem; align-items:center;}
+  .file-upload input[type="file"], .file-upload select, .controls button, .controls input[type=range] { padding:0.5rem 1rem; border-radius:0.5rem; font-weight:600; font-size:1rem;}
+  #sheet-container { border:1px solid #e2e8f0; border-radius:1rem; padding:1rem; background:#f7fafc; overflow:auto; height:500px;}
+  .highlight-measure { stroke:orange !important; stroke-width:4 !important; stroke-opacity:0.5 !important; fill-opacity:0.2 !important; }
+  .highlight-note { fill:orange !important; }
 </style>
 </head>
 <body>
 <div class="container">
-<h1 style="text-align:center; font-size:2rem; font-weight:800; color:#1e3a8a; margin-bottom:1.5rem;">🎼 AI Sheet Music Player</h1>
+  <h1 style="text-align:center; font-size:2rem; font-weight:800; color:#1e3a8a; margin-bottom:1.5rem;">🎼 AI Sheet Music Player</h1>
+  
+  <div class="file-upload">
+    <input type="file" id="file-input" accept=".musicxml,.xml,.mxl">
+    <select id="instrument-select">
+      <option value="acoustic_grand_piano">🎹 Piano</option>
+      <option value="violin">🎻 Violin</option>
+      <option value="flute">🎶 Flute</option>
+      <option value="acoustic_guitar_nylon">🎸 Guitar</option>
+      <option value="soprano_sax">🎷 Saxophone</option>
+      <option value="trombone">🦴 Trombone</option>
+      <option value="cello">🎻 Cello</option>
+    </select>
+    <label for="speed-range">Speed: <span id="speed-display">120 BPM</span></label>
+    <input type="range" id="speed-range" min="30" max="240" value="120" step="1">
+    <label for="mode-toggle">Listening Mode</label>
+    <input type="checkbox" id="mode-toggle" checked>
+  </div>
 
-<div class="file-upload">
-  <input type="file" id="file-input" accept=".musicxml,.xml,.mxl">
-  <select id="instrument-select">
-    <option value="acoustic_grand_piano">🎹 Piano</option>
-    <option value="violin">🎻 Violin</option>
-    <option value="flute">🎶 Flute</option>
-    <option value="acoustic_guitar_nylon">🎸 Guitar</option>
-    <option value="soprano_sax">🎷 Saxophone</option>
-    <option value="trombone">🦴 Trombone</option>
-    <option value="cello">🎻 Cello</option>
-  </select>
-  <label for="speed-range">Speed: <span id="speed-display">120 BPM</span></label>
-  <input type="range" id="speed-range" min="30" max="240" value="120" step="1">
+  <div class="controls">
+    <button id="play-btn" style="background-color:#22c55e; color:white;">▶️ Play</button>
+    <button id="stop-btn" style="background-color:#ef4444; color:white;">⏹ Stop</button>
+  </div>
+
+  <div id="sheet-container"></div>
 </div>
 
-<div class="controls">
-  <button id="play-btn" style="background-color:#22c55e; color:white;">▶️ Play</button>
-  <button id="stop-btn" style="background-color:#ef4444; color:white;">⏹ Stop</button>
-</div>
+<script type="module">
+import { OpenSheetMusicDisplay } from 'opensheetmusiclibrary.min.js';
+import Soundfont from 'https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.js';
 
-<div id="sheet-container"></div>
-</div>
+let osmd;
+let audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let currentInstrument;
+let bpm = 120;
+let listeningMode = true;
+let midiAccess = null;
+let activeNotes = new Set();
 
-<!-- Load required libraries -->
-<script src="opensheetmusicdisplay.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+const container = document.getElementById('sheet-container');
+const speedRange = document.getElementById('speed-range');
+const speedDisplay = document.getElementById('speed-display');
+const modeToggle = document.getElementById('mode-toggle');
 
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const osmdContainer = document.getElementById("sheet-container");
-  const fileInput = document.getElementById("file-input");
-  const instrumentSelect = document.getElementById("instrument-select");
-  const playBtn = document.getElementById("play-btn");
-  const stopBtn = document.getElementById("stop-btn");
-  const speedRange = document.getElementById("speed-range");
-  const speedDisplay = document.getElementById("speed-display");
+speedRange.addEventListener('input', () => {
+  bpm = parseInt(speedRange.value);
+  speedDisplay.textContent = bpm + ' BPM';
+});
 
-  let osmd = new OSMD.OSMD(osmdContainer, {autoResize: true}); // <--- use OSMD.OSMD
-  let audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  let instrument = null;
-  let sequence = [];
-  let currentNoteIndex = 0;
-  let playing = false;
-  let playbackSpeed = parseInt(speedRange.value);
+modeToggle.addEventListener('change', () => listeningMode = modeToggle.checked);
 
-  speedRange.addEventListener("input", () => {
-    playbackSpeed = parseInt(speedRange.value);
-    speedDisplay.textContent = playbackSpeed + " BPM";
-  });
+document.getElementById('instrument-select').addEventListener('change', async (e) => {
+  const instrumentName = e.target.value;
+  currentInstrument = await Soundfont.instrument(audioContext, instrumentName);
+});
 
-  async function loadInstrument(name) {
-    instrument = await Soundfont.instrument(audioContext, name);
-  }
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    osmd = new OpenSheetMusicDisplay(container, { autoResize:true });
+    await osmd.load(event.target.result);
+    await osmd.render();
+    highlightMeasures();
+  };
+  reader.readAsText(file);
+});
 
-  async function extractNoteSequence(osmd) {
-    const seq = [];
-    if (!osmd.Sheet || !osmd.Sheet.MeasureList) return seq;
-    osmd.Sheet.MeasureList.forEach(measure => {
-      if (!measure.Voices) return;
-      measure.Voices.forEach(voice => {
-        voice.Notes.forEach(note => {
-          seq.push({
-            midi: note.MidiPitch,
-            measureId: measure.AbsoluteNumber,
-            noteObj: note
-          });
-        });
-      });
+document.getElementById('play-btn').addEventListener('click', async () => {
+  if (!osmd || !currentInstrument) return alert('Load a file and select an instrument.');
+  playSequence();
+});
+
+document.getElementById('stop-btn').addEventListener('click', () => {
+  audioContext.close();
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+});
+
+function highlightMeasures() {
+  const measures = osmd.GraphicSheet.MeasureElements;
+  measures.forEach(measure => {
+    measure.notes.forEach(note => {
+      note.cursorHighlight = false;
     });
-    return seq;
-  }
+  });
+}
 
-  fileInput.addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const xml = event.target.result;
-      await osmd.load(xml);
-      await osmd.render();
-      sequence = await extractNoteSequence(osmd);
-      currentNoteIndex = 0;
-      console.log("Sequence loaded:", sequence.length, "notes");
+async function playSequence() {
+  const measures = osmd.GraphicSheet.MeasureElements;
+  let timeOffset = audioContext.currentTime;
+
+  for (let measure of measures) {
+    for (let note of measure.Notes) {
+      if (note.MidiPitch) {
+        if (listeningMode) {
+          currentInstrument.play(note.MidiPitch, timeOffset, { duration: 0.5*(120/bpm) });
+        } else {
+          // Training mode: play only when correct MIDI key is pressed
+          await waitForMidiNote(note.MidiPitch);
+          currentInstrument.play(note.MidiPitch, audioContext.currentTime, { duration: 0.5*(120/bpm) });
+        }
+        note.cursorHighlight = true;
+        osmd.render();
+        await new Promise(r => setTimeout(r, 500*(120/bpm)));
+        note.cursorHighlight = false;
+        osmd.render();
+      }
+    }
+  }
+}
+
+async function waitForMidiNote(targetPitch) {
+  return new Promise(resolve => {
+    const handler = (event) => {
+      const note = event.data[1];
+      if (note === targetPitch) {
+        resolve();
+        if (midiAccess) midiAccess.inputs.forEach(input => input.onmidimessage = null);
+      }
     };
-    reader.readAsText(file);
+    if (midiAccess) midiAccess.inputs.forEach(input => input.onmidimessage = handler);
   });
+}
 
-  async function playNote(note) {
-    if (instrument && note.midi != null) {
-      instrument.play(note.midi, audioContext.currentTime, { gain: 1 });
-    }
-    highlightNote(note);
-  }
-
-  function highlightNote(note) {
-    osmd.GraphicSheet.MeasureList.forEach(measure => {
-      measure.MeasureElements.forEach(el => el.forEach(g => g.selected = false));
-    });
-    if (note.noteObj) {
-      note.noteObj.notes.forEach(n => n.parentGraphicalVoiceEntry?.Notes.forEach(g => g.selected = true));
-    }
-  }
-
-  async function playSequence() {
-    if (!sequence || sequence.length === 0) return;
-    playing = true;
-    while (currentNoteIndex < sequence.length && playing) {
-      await playNote(sequence[currentNoteIndex]);
-      await new Promise(r => setTimeout(r, 60000 / playbackSpeed));
-      currentNoteIndex++;
-    }
-    playing = false;
-  }
-
-  playBtn.addEventListener("click", () => {
-    if (!instrument) loadInstrument(instrumentSelect.value).then(playSequence);
-    else playSequence();
-  });
-
-  stopBtn.addEventListener("click", () => {
-    playing = false;
-  });
+navigator.requestMIDIAccess().then((access) => {
+  midiAccess = access;
 });
 </script>
-
 </body>
 </html>
