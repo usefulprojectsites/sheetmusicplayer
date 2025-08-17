@@ -1,150 +1,717 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Sheet Music Player with MIDI Training</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AI Sheet Music Trainer — Listen / Train + Full Fingerboards</title>
+
+<!-- OpenSheetMusicDisplay -->
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.9/build/opensheetmusicdisplay.min.js"></script>
+
 <style>
-  body { font-family: 'Inter', sans-serif; background: linear-gradient(to bottom right, #1e3a8a, #3b82f6); margin:0; padding:0; color:#1f2937;}
-  .container { max-width:960px; margin:2rem auto; padding:2rem; background:white; border-radius:1rem; box-shadow:0 10px 25px rgba(0,0,0,0.15);}
-  .file-upload, .controls { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem; align-items:center;}
-  .file-upload input[type="file"], .file-upload select, .controls button, .controls input[type=range] { padding:0.5rem 1rem; border-radius:0.5rem; font-weight:600; font-size:1rem;}
-  #sheet-container { border:1px solid #e2e8f0; border-radius:1rem; padding:1rem; background:#f7fafc; overflow:auto; height:500px;}
-  .highlight-measure { stroke:orange !important; stroke-width:4 !important; stroke-opacity:0.5 !important; fill-opacity:0.2 !important; }
-  .highlight-note { fill:orange !important; }
+:root{
+  --bg:#f5f8fb; --card:#fff; --accent:#3b82f6; --accent2:#06b6d4;
+  --ok:#16a34a; --bad:#ef4444; --muted:#64748b; --text:#0f172a;
+  --measure:#bfdbfe66;
+  --gap:16px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:Inter,system-ui,Segoe UI,Arial;color:var(--text);padding:24px}
+.container{max-width:1240px;margin:0 auto}
+.card{background:var(--card);border-radius:16px;padding:22px;box-shadow:0 14px 40px rgba(2,6,23,.06)}
+.header{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.title{font-size:22px;font-weight:800;margin-right:auto}
+.sub{color:var(--muted);font-weight:600}
+.toolbar{display:grid;grid-template-columns:1fr 360px 260px;gap:14px;align-items:center;margin-top:12px}
+@media(max-width:1000px){ .toolbar{grid-template-columns:1fr} }
+
+.panel{background:#fbfeff;border:1px solid #e6f4ff;padding:14px;border-radius:12px}
+
+.instrument-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.instrument {display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:#fff;border:1px solid #e8f2ff;cursor:pointer;transition:.12s}
+.instrument.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 8px 30px rgba(14,165,233,.12)}
+.instrument .icon{font-size:22px}
+
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.select, input[type=file]{padding:10px;border-radius:10px;border:1px solid #e6f4ff;background:#fff}
+.btn{padding:10px 14px;border-radius:10px;border:1px solid #dbeafe;background:#fff;font-weight:800;cursor:pointer}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent}
+.btn.danger{background:linear-gradient(135deg,#ef4444,#fb923c);color:#fff;border-color:transparent}
+
+/* Toggle */
+.toggle{width:120px;height:44px;border-radius:999px;background:#eef6ff;display:flex;align-items:center;padding:6px;position:relative;cursor:pointer}
+.knob{width:36px;height:36px;border-radius:999px;background:linear-gradient(135deg,var(--accent),var(--accent2));position:absolute;left:6px;top:4px;transition:left .18s}
+.toggle.active .knob{left:78px}
+.toggle .txt{width:100%;text-align:center;font-weight:800;color:var(--muted);font-size:13px}
+.toggle.active .listen{opacity:.45}
+.toggle:not(.active) .train{opacity:.45}
+
+/* Sheet */
+#sheet{margin-top:18px;border-radius:12px;background:#fff;border:1px solid #e6f4ff;padding:18px;min-height:360px;max-height:70vh;overflow:auto}
+#sheet svg{width:100%!important;height:auto!important}
+.highlight-measure{fill:var(--measure)!important;stroke:var(--accent)!important;stroke-width:2px!important}
+
+/* piano */
+.piano{margin-top:18px; height:190px; background:#fff;border-radius:12px;border:1px solid #e6f4ff;padding:12px;overflow-x:auto;white-space:nowrap}
+.white{display:inline-block;width:38px;height:190px;background:#fff;border:1px solid #e6efff;margin-right:3px;border-bottom-left-radius:8px;border-bottom-right-radius:8px;position:relative}
+.black{position:absolute;width:26px;height:110px;background:#0b1220;border-radius:0 0 6px 6px;left:28px;top:0;border:1px solid #1f2937;z-index:2}
+.key.mark{box-shadow:inset 0 0 0 4px rgba(34,197,94,.14)}
+.key.correct{background:rgba(34,197,94,.15)!important}
+.key.wrong{background:rgba(239,68,68,.15)!important}
+.key.ring{outline:3px solid #93c5fd;outline-offset:3px}
+
+/* helper area */
+.helper{display:grid;grid-template-columns:1fr 360px;gap:16px;margin-top:18px}
+@media(max-width:1000px){ .helper{grid-template-columns:1fr} }
+.helpCard{background:#fff;border:1px solid #e6f4ff;border-radius:12px;padding:14px}
+.helpTitle{font-weight:800;margin-bottom:8px}
+
+/* diagrams */
+.fingerboard, .fretboard, .windboard, .slideboard {width:100%;height:240px;border-radius:10px;background:linear-gradient(180deg,#fff,#fbfdff);border:1px solid #e6f4ff;display:flex;align-items:center;justify-content:center;position:relative}
+.note-bubble{position:absolute;top:12px;right:12px;background:#ecfeff;padding:8px;border-radius:8px;border:1px solid #dbeafe;font-weight:800}
+
+/* tuner (collapsible) */
+.tuner{margin-top:12px;padding:12px;border-radius:10px;background:#fff;border:1px solid #e6f4ff;display:none}
+.tunerRow{display:flex;gap:10px;align-items:center}
+.tunerGauge{width:220px;height:36px;background:#f1f5f9;border-radius:18px;position:relative;border:1px solid #e6f4ff}
+.tunerNeedle{position:absolute;left:50%;top:2px;width:4px;height:32px;background:var(--accent);border-radius:2px;transform:translateX(-50%);transition:left .06s}
+
+/* misc */
+.small{font-size:13px;color:var(--muted)}
+.hud{position:fixed;top:18px;left:50%;transform:translateX(-50%);padding:10px 14px;border-radius:10px;color:#fff;font-weight:800;display:none;z-index:999}
+.hud.ok{background:linear-gradient(135deg,#16a34a,#22c55e)} .hud.bad{background:linear-gradient(135deg,#ef4444,#fb923c)}
 </style>
 </head>
 <body>
 <div class="container">
-  <h1 style="text-align:center; font-size:2rem; font-weight:800; color:#1e3a8a; margin-bottom:1.5rem;">🎼 AI Sheet Music Player</h1>
-  
-  <div class="file-upload">
-    <input type="file" id="file-input" accept=".musicxml,.xml,.mxl">
-    <select id="instrument-select">
-      <option value="acoustic_grand_piano">🎹 Piano</option>
-      <option value="violin">🎻 Violin</option>
-      <option value="flute">🎶 Flute</option>
-      <option value="acoustic_guitar_nylon">🎸 Guitar</option>
-      <option value="soprano_sax">🎷 Saxophone</option>
-      <option value="trombone">🦴 Trombone</option>
-      <option value="cello">🎻 Cello</option>
-    </select>
-    <label for="speed-range">Speed: <span id="speed-display">120 BPM</span></label>
-    <input type="range" id="speed-range" min="30" max="240" value="120" step="1">
-    <label for="mode-toggle">Listening Mode</label>
-    <input type="checkbox" id="mode-toggle" checked>
-  </div>
+  <div class="card">
+    <div class="header">
+      <div class="title">🎼 AI Sheet Music Trainer</div>
+      <div class="sub small">Listen & Train • MIDI & Microphone • Interactive fingerboards</div>
+    </div>
 
-  <div class="controls">
-    <button id="play-btn" style="background-color:#22c55e; color:white;">▶️ Play</button>
-    <button id="stop-btn" style="background-color:#ef4444; color:white;">⏹ Stop</button>
-  </div>
+    <div class="toolbar" style="margin-top:12px">
+      <div class="panel">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <input id="file" type="file" accept=".musicxml,.xml,.mxl" class="select"/>
+          <select id="midiIn" class="select"><option value="">MIDI In (none)</option></select>
+          <div id="modeToggle" class="toggle" title="Toggle Listen / Train" role="switch" aria-checked="true">
+            <div class="knob"></div>
+            <div class="txt listen">Listen</div>
+            <div class="txt train">Train</div>
+          </div>
+        </div>
 
-  <div id="sheet-container"></div>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label class="small">Instrument</label>
+            <div id="instrumentGrid" class="instrument-grid" style="width:440px"></div>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+            <div class="small">BPM</div>
+            <input id="bpmRange" type="range" min="30" max="240" value="120"/>
+            <div id="bpmVal" class="small" style="width:44px;text-align:center">120</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="display:flex;flex-direction:column;gap:12px;align-items:stretch">
+        <div style="display:flex;gap:8px">
+          <button id="playBtn" class="btn primary">▶ Play</button>
+          <button id="pauseBtn" class="btn">⏸ Pause</button>
+          <button id="stopBtn" class="btn danger">⏹ Stop</button>
+        </div>
+        <div class="small">Use Listen for automatic playback at the chosen BPM. Use Train to advance only after the correct note(s) are detected.</div>
+      </div>
+
+      <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="small">Tuner</div>
+          <button id="toggleTuner" class="btn">Open Tuner</button>
+        </div>
+        <div class="small">When a non-piano instrument is selected, the tuner helps you tune and the mic will be used for training.</div>
+      </div>
+    </div>
+
+    <!-- sheet -->
+    <div id="sheet"></div>
+
+    <!-- piano -->
+    <div id="piano" class="piano" aria-label="88-key piano"></div>
+
+    <!-- helper / fingerboards / tuner -->
+    <div class="helper" style="margin-top:18px">
+      <div class="helpCard" style="min-height:260px">
+        <div class="helpTitle">Expectation & Hints</div>
+        <div id="expectPanel" class="small">Load a score to begin.</div>
+        <div style="margin-top:12px" id="diagramWrap"></div>
+      </div>
+
+      <div class="helpCard" style="min-height:260px">
+        <div class="helpTitle">Fingering / Position</div>
+        <div id="fingerCard" class="small">Select an instrument to view the interactive diagram.</div>
+
+        <div class="tuner" id="tunerPanel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div><strong>🎵 Tuner</strong></div>
+            <div id="tunerNote" class="small">--</div>
+          </div>
+          <div class="tunerRow" style="align-items:center">
+            <div class="tunerGauge" id="tunerGauge"><div class="tunerNeedle" id="tunerNeedle"></div></div>
+            <div id="tunerStatus" style="width:120px;text-align:center"></div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <button id="tuneClose" class="btn">Close</button>
+            <label class="small" style="margin-left:auto">Tolerance (cents)</label>
+            <input id="tuneTol" type="range" min="5" max="80" step="1" value="30" />
+            <div id="tuneTolVal" class="small">30¢</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
 </div>
 
-<script type="module">
-import { OpenSheetMusicDisplay } from 'opensheetmusiclibrary.min.js';
-import Soundfont from 'https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.js';
+<div id="hud" class="hud"></div>
 
-let osmd;
-let audioContext = new (window.AudioContext || window.webkitAudioContext)();
-let currentInstrument;
-let bpm = 120;
-let listeningMode = true;
-let midiAccess = null;
-let activeNotes = new Set();
+<script>
+/* =========================
+   Utilities & globals
+   ========================= */
+const PLOW = 21, PHIGH = 108;
+let osmd = null;
+let steps = [], stepIndex = 0, expected = new Set();
+let listenMode = true;
+let bpm = 120, autoTimer = null;
+let midiAccess = null, midiInSelect = null, activeInput = null;
+let midiDown = new Set();
+let currentInstrument = 'piano';
+let actx = null, micStream = null, analyser = null, pitchLoopId = null;
+let tunerOpen = false;
+let tuneTolerance = 30; // cents
 
-const container = document.getElementById('sheet-container');
-const speedRange = document.getElementById('speed-range');
-const speedDisplay = document.getElementById('speed-display');
-const modeToggle = document.getElementById('mode-toggle');
+function hud(msg, ok=true){ const h=document.getElementById('hud'); h.textContent=msg; h.className='hud '+(ok?'ok':'bad'); h.style.display='block'; clearTimeout(h._t); h._t=setTimeout(()=>h.style.display='none',1200); }
+function ensureCtx(){ if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume(); }
+function midiToName(m){ const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]; return names[(m%12+12)%12] + (Math.floor(m/12)-1); }
 
-speedRange.addEventListener('input', () => {
-  bpm = parseInt(speedRange.value);
-  speedDisplay.textContent = bpm + ' BPM';
-});
-
-modeToggle.addEventListener('change', () => listeningMode = modeToggle.checked);
-
-document.getElementById('instrument-select').addEventListener('change', async (e) => {
-  const instrumentName = e.target.value;
-  currentInstrument = await Soundfont.instrument(audioContext, instrumentName);
-});
-
-document.getElementById('file-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async (event) => {
-    osmd = new OpenSheetMusicDisplay(container, { autoResize:true });
-    await osmd.load(event.target.result);
-    await osmd.render();
-    highlightMeasures();
-  };
-  reader.readAsText(file);
-});
-
-document.getElementById('play-btn').addEventListener('click', async () => {
-  if (!osmd || !currentInstrument) return alert('Load a file and select an instrument.');
-  playSequence();
-});
-
-document.getElementById('stop-btn').addEventListener('click', () => {
-  audioContext.close();
-  audioContext = new (window.AudioContext || window.webkitAudioContext)();
-});
-
-function highlightMeasures() {
-  const measures = osmd.GraphicSheet.MeasureElements;
-  measures.forEach(measure => {
-    measure.notes.forEach(note => {
-      note.cursorHighlight = false;
-    });
-  });
-}
-
-async function playSequence() {
-  const measures = osmd.GraphicSheet.MeasureElements;
-  let timeOffset = audioContext.currentTime;
-
-  for (let measure of measures) {
-    for (let note of measure.Notes) {
-      if (note.MidiPitch) {
-        if (listeningMode) {
-          currentInstrument.play(note.MidiPitch, timeOffset, { duration: 0.5*(120/bpm) });
-        } else {
-          // Training mode: play only when correct MIDI key is pressed
-          await waitForMidiNote(note.MidiPitch);
-          currentInstrument.play(note.MidiPitch, audioContext.currentTime, { duration: 0.5*(120/bpm) });
-        }
-        note.cursorHighlight = true;
-        osmd.render();
-        await new Promise(r => setTimeout(r, 500*(120/bpm)));
-        note.cursorHighlight = false;
-        osmd.render();
+/* =========================
+   Render piano keys
+   ========================= */
+function renderPiano(){
+  const p = document.getElementById('piano'); p.innerHTML='';
+  const whiteMods = [0,2,4,5,7,9,11];
+  for(let m=PLOW;m<=PHIGH;m++){
+    if(whiteMods.includes(m%12)){
+      const w = document.createElement('div'); w.className='white key'; w.dataset.midi=m;
+      // attach click
+      w.addEventListener('click', ()=>onVirtualKey(m));
+      p.appendChild(w);
+      if(![4,11].includes(m%12)){
+        const b = document.createElement('div'); b.className='black key'; b.dataset.midi=m+1;
+        b.addEventListener('click', e=>{ e.stopPropagation(); onVirtualKey(m+1); });
+        w.appendChild(b);
       }
     }
   }
 }
+renderPiano();
 
-async function waitForMidiNote(targetPitch) {
-  return new Promise(resolve => {
-    const handler = (event) => {
-      const note = event.data[1];
-      if (note === targetPitch) {
-        resolve();
-        if (midiAccess) midiAccess.inputs.forEach(input => input.onmidimessage = null);
-      }
-    };
-    if (midiAccess) midiAccess.inputs.forEach(input => input.onmidimessage = handler);
-  });
+function markExpected(set){ document.querySelectorAll('.key').forEach(k=>k.classList.remove('mark')); set.forEach(m=>{ const el=document.querySelector(`.key[data-midi="${m}"]`); if(el) el.classList.add('mark'); }); }
+function flashKey(midi, ok=true){ const el=document.querySelector(`.key[data-midi="${midi}"]`); if(!el) return; el.classList.remove('correct','wrong'); void el.offsetWidth; el.classList.add(ok?'correct':'wrong'); }
+function ringKey(midi,on=true){ const el=document.querySelector(`.key[data-midi="${midi}"]`); if(!el)return; el.classList.toggle('ring', !!on); }
+
+/* =========================
+   OSMD loader & step extraction
+   ========================= */
+function createOSMD(){
+  const ctor = (window.opensheetmusicdisplay && window.opensheetmusicdisplay.OpenSheetMusicDisplay) || window.OpenSheetMusicDisplay;
+  if(!ctor){ alert('OSMD not loaded.'); throw new Error('OSMD missing'); }
+  return new ctor("sheet",{autoResize:true, drawTitle:true, drawPartNames:true, followCursor:true});
 }
 
-navigator.requestMIDIAccess().then((access) => {
-  midiAccess = access;
+function buildSteps(){
+  steps = []; stepIndex = 0; expected = new Set();
+  const c = osmd.cursor; c.show(); c.reset();
+  while(!c.iterator.endReached){
+    const ve = c.iterator.CurrentVoiceEntries || [];
+    const set = new Set();
+    let qlen = 1;
+    ve.forEach(v=> (v.Notes || []).forEach(n=>{
+      if(n.isRest && n.isRest()) return;
+      let midi = null;
+      if(typeof n.halfTone==='number') midi = n.halfTone;
+      else if(n.sourceNote?.halfTone!=null) midi = n.sourceNote.halfTone;
+      else if(n.Pitch?.Midi!=null) midi = n.Pitch.Midi;
+      if(Number.isFinite(midi)) set.add(midi);
+      if(n.Length && Number.isFinite(n.Length.RealValue)) qlen = Math.max(qlen, n.Length.RealValue);
+    }));
+    steps.push({pitches:set, beats:qlen});
+    c.next();
+  }
+  c.reset(); c.hide();
+  expected = steps[0]?.pitches ?? new Set();
+  markExpected(expected); highlightMeasure();
+  updateExpectationPanel();
+}
+
+/* =========================
+   Cursor & measure highlight
+   ========================= */
+function gotoStep(i){
+  if(!osmd) return;
+  stepIndex = Math.max(0, Math.min(i, steps.length-1));
+  const c = osmd.cursor; c.show(); c.reset();
+  for(let k=0;k<stepIndex && !c.iterator.endReached;k++) c.next();
+  expected = steps[stepIndex]?.pitches ?? new Set();
+  markExpected(expected); highlightMeasure(); updateExpectationPanel();
+}
+function nextStep(){ if(stepIndex+1<steps.length) gotoStep(stepIndex+1); }
+function highlightMeasure(){
+  try{
+    const c = osmd.cursor; if(!c) return;
+    const m = c.iterator?.CurrentMeasure || c.iterator?.currentMeasure;
+    if(!m) return;
+    // remove all
+    document.querySelectorAll('#sheet svg .highlight-measure').forEach(el=>el.classList.remove('highlight-measure'));
+    const el = m.svgElement || m.MeasureNode;
+    if(el && el.classList) el.classList.add('highlight-measure');
+  }catch(e){}
+}
+
+/* =========================
+   Play / Listen auto
+   ========================= */
+function startListen(){
+  stopAuto();
+  if(!steps.length) return hud('Load a score first', false);
+  const msPerBeat = 60000 / bpm;
+  function tick(){
+    const s = steps[stepIndex];
+    if(!s){ stopAuto(); return; }
+    // small click
+    clickSound();
+    nextStep();
+    const delay = Math.max(50, s.beats * msPerBeat);
+    autoTimer = setTimeout(tick, delay);
+  }
+  autoTimer = setTimeout(tick, 50);
+}
+function stopAuto(){ if(autoTimer){ clearTimeout(autoTimer); autoTimer=null; } }
+function pauseAuto(){ stopAuto(); }
+
+/* tiny click sound */
+function clickSound(){ try{ ensureCtx(); const o=actx.createOscillator(), g=actx.createGain(); o.type='sine'; o.frequency.value=1000; g.gain.value=0.07; o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+0.03);}catch(e){} }
+
+/* =========================
+   MIDI init & handling
+   ========================= */
+async function initMIDI(){
+  midiInSelect = document.getElementById('midiIn');
+  if(!navigator.requestMIDIAccess) { console.warn('No Web MIDI'); return; }
+  try{
+    midiAccess = await navigator.requestMIDIAccess();
+    populateMIDI();
+    midiAccess.onstatechange = populateMIDI;
+  }catch(e){ console.warn(e); }
+}
+function populateMIDI(){
+  if(!midiAccess) return;
+  const prev = midiInSelect.value; midiInSelect.innerHTML = '<option value="">(none)</option>';
+  for(const input of midiAccess.inputs.values()){
+    const o = document.createElement('option'); o.value=input.id; o.textContent=input.name||input.id; midiInSelect.appendChild(o);
+  }
+  midiInSelect.onchange = ()=>attachInput(midiInSelect.value);
+  if(prev) attachInput(prev); else { const it=midiAccess.inputs.values().next(); if(it.value) attachInput(it.value.id); }
+}
+function attachInput(id){
+  if(activeInput) activeInput.onmidimessage=null; activeInput=null;
+  for(const i of midiAccess.inputs.values()) if(i.id===id) activeInput=i;
+  if(activeInput){ activeInput.onmidimessage = onMIDI; hud('MIDI connected: '+(activeInput.name||activeInput.id), true); }
+}
+function onMIDI(e){
+  const [status, note, vel] = e.data; const cmd = status & 0xf0;
+  const on = (cmd === 0x90 && vel>0); const off = (cmd===0x80) || (cmd===0x90 && vel===0);
+  if(on){ midiDown.add(note); ringKey(note,true); if(currentInstrument!=='piano') return; if(listenMode) return;
+    if(expected.has(note)){ flashKey(note,true); if([...expected].every(n=>midiDown.has(n))){ setTimeout(()=> nextStep(), 80); } } else { flashKey(note,false); smallBeep(); hud('Wrong note', false); }
+  } else if(off){ midiDown.delete(note); ringKey(note,false); }
+}
+
+/* =========================
+   Mic pitch detection (autocorrelation) & tuner
+   ========================= */
+function startMic(){
+  if(analyser) return;
+  try{
+    ensureCtx();
+    navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+      micStream = stream;
+      const src = actx.createMediaStreamSource(stream);
+      analyser = actx.createAnalyser(); analyser.fftSize = 2048;
+      src.connect(analyser);
+      runPitchLoop();
+      hud('Mic on', true);
+    }).catch(err=>{ console.warn(err); hud('Mic denied', false); });
+  }catch(e){ console.warn(e); }
+}
+function stopMic(){
+  if(micStream) micStream.getTracks().forEach(t=>t.stop());
+  micStream = null; analyser = null; if(pitchLoopId) cancelAnimationFrame(pitchLoopId);
+}
+function smallBeep(){ try{ ensureCtx(); const o=actx.createOscillator(), g=actx.createGain(); o.type='square'; o.frequency.value=220; g.gain.value=0.12; o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+0.12);}catch(e){} }
+
+function autoCorrelateFloat(buf, sr){
+  // robust autocorrelation for Float32 data
+  let SIZE = buf.length; let rms=0; for(let i=0;i<SIZE;i++){ rms += buf[i]*buf[i]; }
+  rms = Math.sqrt(rms/SIZE); if(rms < 0.01) return -1;
+  let r1=0, r2=SIZE-1, thres=0.2;
+  for(let i=0;i<SIZE/2;i++){ if(Math.abs(buf[i])<thres){ r1=i; break; } }
+  for(let i=1;i<SIZE/2;i++){ if(Math.abs(buf[SIZE-i])<thres){ r2=SIZE-i; break; } }
+  buf = buf.slice(r1, r2); SIZE = buf.length;
+  if(SIZE < 32) return -1;
+  const c = new Array(SIZE).fill(0);
+  for(let i=0;i<SIZE;i++) for(let j=0;j<SIZE-i;j++) c[i] += buf[j]*buf[j+i];
+  let d=0; while(c[d] > c[d+1]) d++;
+  let maxpos = -1, maxval = -1;
+  for(let i=d;i<SIZE;i++){ if(c[i] > maxval){ maxval = c[i]; maxpos = i; } }
+  if(maxpos <= 0) return -1;
+  return sr / maxpos;
+}
+
+let lastStable = null, stableCount = 0;
+function runPitchLoop(){
+  const fbuf = new Float32Array(analyser.fftSize);
+  function step(){
+    analyser.getFloatTimeDomainData(fbuf);
+    const freq = autoCorrelateFloat(fbuf, actx.sampleRate);
+    if(freq > 0){
+      const midi = Math.round(69 + 12*Math.log2(freq/440));
+      // smoothing
+      if(midi === lastStable) stableCount++; else { lastStable = midi; stableCount = 1; }
+      if(stableCount < 2){ pitchLoopId = requestAnimationFrame(step); return; }
+      // show tuner
+      updateTunerDisplay(freq, midi);
+      // If training with non-piano, treat mic as input
+      if(!listenMode && currentInstrument !== 'piano'){
+        // accept within tolerance
+        const cents = 1200 * Math.log2(freq / (440 * Math.pow(2,(midi-69)/12)));
+        if(Math.abs(cents) <= tuneTolerance){
+          if(expected.has(midi)){ flashKey(midi,true); setTimeout(()=> nextStep(), 90); }
+        } else {
+          flashKey(midi,false); smallBeep(); hud('Off pitch', false);
+        }
+      }
+    }
+    pitchLoopId = requestAnimationFrame(step);
+  }
+  step();
+}
+
+/* tuner UI */
+function updateTunerDisplay(freq, midi){
+  const gauge = document.getElementById('tunerGauge'), needle = document.getElementById('tunerNeedle'), status = document.getElementById('tunerStatus');
+  const noteName = midiToName(midi); document.getElementById('tunerNote').textContent = noteName + ' ('+midi+')';
+  const cents = Math.round(1200 * Math.log2(freq / (440 * Math.pow(2,(midi-69)/12))));
+  // convert cents (-50..+50) to left percentage of gauge
+  const leftPct = 50 + Math.max(-60, Math.min(60, cents)) * (50/60);
+  needle.style.left = leftPct + '%';
+  if(Math.abs(cents) <= tuneTolerance) status.textContent = 'In tune'; else status.textContent = (cents>0?'Sharp ':'Flat ') + Math.abs(cents) + '¢';
+}
+
+/* =========================
+   Instrument selector & diagrams
+   ========================= */
+const instruments = ['piano','violin','guitar','flute','clarinet','trombone','cello'];
+function buildInstrumentGrid(){
+  const grid = document.getElementById('instrumentGrid');
+  grid.innerHTML = '';
+  const icons = {piano:'🎹',violin:'🎻',guitar:'🎸',flute:'🎶',clarinet:'🎷',trombone:'🎺',cello:'🎻'};
+  instruments.forEach(inst=>{
+    const el = document.createElement('div'); el.className='instrument' + (inst==='piano'?' active':''); el.dataset.inst=inst;
+    el.innerHTML = `<div class="icon">${icons[inst]||'🎵'}</div><div style="font-weight:800">${inst[0].toUpperCase()+inst.slice(1)}</div>`;
+    el.addEventListener('click', ()=>selectInstrument(inst, el));
+    grid.appendChild(el);
+  });
+}
+buildInstrumentGrid();
+
+function selectInstrument(inst, el){
+  // UI
+  document.querySelectorAll('.instrument').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  currentInstrument = inst;
+  hud('Instrument: '+inst, true);
+  // mic vs midi
+  if(inst === 'piano'){ stopMic(); } else { startMic(); }
+  // update diagram
+  renderDiagram(inst);
+  updateExpectationPanel();
+}
+
+/* =========================
+   Render per-instrument diagrams
+   ========================= */
+function renderDiagram(inst){
+  const wrap = document.getElementById('diagramWrap'); wrap.innerHTML = '';
+  if(inst === 'piano'){
+    // nothing — piano keys are below
+    document.getElementById('fingerCard').textContent = 'Piano: use the 88-key display below. Expected keys are highlighted.';
+    return;
+  }
+  if(inst === 'violin' || inst === 'cello'){
+    const fb = document.createElement('div'); fb.className='fingerboard';
+    fb.innerHTML = `<div class="note-bubble">Expected: <span id="bubbleNotes">–</span></div>`;
+    // inline svg with 4 strings and semitone ticks across (12*4 visible positions)
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS,'svg'); svg.setAttribute('width','100%'); svg.setAttribute('height','220'); svg.setAttribute('viewBox','0 0 1000 220');
+    // draw board
+    const board = document.createElementNS(svgNS,'rect'); board.setAttribute('x',50); board.setAttribute('y',30); board.setAttribute('width',900); board.setAttribute('height',160); board.setAttribute('fill','#fff'); board.setAttribute('stroke','#dbeafe'); svg.appendChild(board);
+    // strings: draw 4 horizontal lines
+    for(let s=0;s<4;s++){
+      const y = 60 + s*40;
+      const line = document.createElementNS(svgNS,'line'); line.setAttribute('x1',60); line.setAttribute('y1',y); line.setAttribute('x2',940); line.setAttribute('y2',y); line.setAttribute('stroke','#334155'); line.setAttribute('stroke-width',2); svg.appendChild(line);
+    }
+    // semitone positions markers across (24 positions)
+    for(let i=0;i<=24;i++){
+      const x = 70 + (i/24)*(860);
+      const tick = document.createElementNS(svgNS,'line'); tick.setAttribute('x1',x); tick.setAttribute('y1',50); tick.setAttribute('x2',x); tick.setAttribute('y2',190); tick.setAttribute('stroke','#e6eef8'); tick.setAttribute('stroke-width',1); svg.appendChild(tick);
+    }
+    fb.appendChild(svg);
+    wrap.appendChild(fb);
+    // store for highlighting
+    fb._svg = svg;
+    fb._type = inst;
+    return;
+  }
+  if(inst === 'guitar'){
+    const fb = document.createElement('div'); fb.className='fretboard';
+    fb.innerHTML = `<div class="note-bubble">Expected: <span id="bubbleNotes">–</span></div>`;
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS,'svg'); svg.setAttribute('width','100%'); svg.setAttribute('height','220'); svg.setAttribute('viewBox','0 0 1000 220');
+    const board = document.createElementNS(svgNS,'rect'); board.setAttribute('x',40); board.setAttribute('y',30); board.setAttribute('width',920); board.setAttribute('height',160); board.setAttribute('fill','#fff'); board.setAttribute('stroke','#dbeafe'); svg.appendChild(board);
+    // strings (6)
+    for(let s=0;s<6;s++){
+      const y = 45 + s*24;
+      const line = document.createElementNS(svgNS,'line'); line.setAttribute('x1',60); line.setAttribute('y1',y); line.setAttribute('x2',940); line.setAttribute('y2',y); line.setAttribute('stroke','#334155'); line.setAttribute('stroke-width',2); svg.appendChild(line);
+    }
+    // frets
+    const frets = 15;
+    for(let f=0; f<=frets; f++){
+      const x = 60 + (f/frets)*(880);
+      const line = document.createElementNS(svgNS,'line'); line.setAttribute('x1',x); line.setAttribute('y1',40); line.setAttribute('x2',x); line.setAttribute('y2',190); line.setAttribute('stroke','#e6eef8'); line.setAttribute('stroke-width',2); svg.appendChild(line);
+    }
+    fb.appendChild(svg); wrap.appendChild(fb); fb._svg = svg; fb._type = inst; return;
+  }
+  if(inst === 'flute' || inst === 'clarinet'){
+    const wb = document.createElement('div'); wb.className='windboard'; wb.innerHTML = `<div class="note-bubble">Expected: <span id="bubbleNotes">–</span></div>`;
+    // simple circles representing keys
+    const keybox = document.createElement('div'); keybox.style.display='flex'; keybox.style.gap='8px'; keybox.style.justifyContent='center'; keybox.style.marginTop='40px';
+    for(let i=0;i<10;i++){ const k=document.createElement('div'); k.style.width='26px'; k.style.height='26px'; k.style.borderRadius='50%'; k.style.border='2px solid #dbeafe'; k.style.background='#fff'; keybox.appendChild(k); }
+    wb.appendChild(keybox); wrap.appendChild(wb); wb._type = inst; return;
+  }
+  if(inst === 'trombone'){
+    const sb = document.createElement('div'); sb.className='slideboard';
+    sb.innerHTML = `<div class="note-bubble">Expected: <span id="bubbleNotes">–</span></div>`;
+    const txt = document.createElement('div'); txt.textContent='Slide positions (approximate)'; txt.style.fontWeight='700';
+    sb.appendChild(txt); wrap.appendChild(sb); sb._type = inst; return;
+  }
+}
+
+/* highlight expected positions on diagrams */
+function updateDiagramHighlights(){
+  const wrap = document.getElementById('diagramWrap');
+  const fb = wrap.querySelector('.fingerboard, .fretboard, .windboard, .slideboard');
+  // update bubble with names
+  const bubbleSpan = wrap.querySelector('#bubbleNotes');
+  if(bubbleSpan) bubbleSpan.textContent = expected.size ? [...expected].map(m=>midiToName(m)).join(', ') : '(rest)';
+  // if fingerboard present, paint dots
+  if(!fb || !fb._svg) return;
+  const svg = fb._svg;
+  // remove old highlights
+  svg.querySelectorAll('.dot').forEach(d=>d.remove());
+  if(expected.size===0) return;
+  if(fb._type==='violin' || fb._type==='cello'){
+    // strings open midi numbers (basic) — violin: G3(55), D4(62), A4(69), E5(76)
+    const opens = fb._type==='violin' ? [55,62,69,76] : [36,43,50,57]; // cello lower
+    // For each expected midi, choose best string (lowest semitone >=0) and place a dot
+    [...expected].forEach(m=>{
+      let best = {s:0, semitone:999};
+      opens.forEach((open,i)=>{ const sem = m - open; if(sem>=0 && sem<best.semitone){ best={s:i,semitone:sem}; }});
+      if(best.semitone===999){ best = {s:opens.length-1, semitone: Math.max(0, m-opens[opens.length-1])}; }
+      // map semitone to x (0..24 -> 70..930)
+      const x = 70 + (Math.min(best.semitone,24)/24)*860;
+      const y = 60 + best.s*40;
+      const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      circle.setAttribute('cx', x); circle.setAttribute('cy', y); circle.setAttribute('r', 8); circle.setAttribute('fill', '#16a34a'); circle.setAttribute('class','dot');
+      svg.appendChild(circle);
+    });
+  } else if(fb._type==='guitar'){
+    // six strings: E2(40), A2(45), D3(50), G3(55), B3(59), E4(64)
+    const opens = [40,45,50,55,59,64];
+    [...expected].forEach(m=>{
+      let best = null;
+      opens.forEach((open,i)=>{ const fret = m-open; if(fret>=0 && fret<=15){ if(!best || fret<best.fret) best={s:i,fret}; }});
+      if(!best){
+        // fallback to lowest string usable
+        const s=0; const fret = Math.max(0, m-opens[0]); best={s,fret:Math.min(15,fret)};
+      }
+      const frets = 15; const x = 60 + (best.fret/frets)*880; const y = 45 + best.s*24;
+      const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      circle.setAttribute('cx', x); circle.setAttribute('cy', y); circle.setAttribute('r', 8); circle.setAttribute('fill', '#16a34a'); circle.setAttribute('class','dot');
+      svg.appendChild(circle);
+    });
+  } else if(fb._type==='flute' || fb._type==='clarinet'){
+    // simplistic: highlight the first N keys as an example — real mapping is complex
+    const keys = svg ? svg.querySelectorAll ? [] : [] : [];
+    // We used placeholder circles earlier; instead, set the first key active (demo)
+    // (In the earlier build, we created DOM circles in HTML — handle those)
+    const keyNodes = fb.querySelectorAll('div > div');
+    if(keyNodes && keyNodes.length){
+      keyNodes.forEach((k, idx)=>k.style.background='#fff');
+      // mark first key for the first expected note
+      const e = [...expected][0];
+      if(typeof e==='number'){ keyNodes[0].style.background='#16a34a' }
+    }
+  } else if(fb._type==='trombone'){
+    // show position estimate (approx)
+    // We'll place a dot in center area proportionally to midi
+    const pos = Math.round(( [...expected][0] || 48 - 40) / 2 );
+    // create a small overlay dot in center
+    const dot = document.createElement('div'); dot.textContent = '●'; dot.style.position='absolute'; dot.style.color='#16a34a'; dot.style.fontSize='28px'; dot.style.left='50%'; dot.style.top='50%'; fb.appendChild(dot);
+    setTimeout(()=>dot.remove(),700);
+  }
+}
+
+/* =========================
+   Expectation panel update
+   ========================= */
+function updateExpectationPanel(){
+  const p = document.getElementById('expectPanel');
+  if(!steps.length){ p.textContent='Load a score to begin.'; return;}
+  const s = steps[stepIndex]?.pitches ?? new Set();
+  if(s.size===0) p.textContent = '(Rest)'; else p.textContent = 'Play: ' + [...s].sort((a,b)=>a-b).map(m=>midiToName(m)).join(', ');
+  // diagram highlights
+  updateDiagramHighlights();
+}
+
+/* =========================
+   Virtual key click (piano)
+   ========================= */
+function onVirtualKey(m){
+  ensureCtx();
+  // if train mode and piano: gate
+  if(currentInstrument==='piano' && !listenMode){
+    if(expected.has(m)){ flashKey(m,true); if([...expected].every(n=> document.querySelector(`.key[data-midi="${n}"].ring`) || true)) { setTimeout(()=> nextStep(), 90); } }
+    else { flashKey(m,false); smallBeep(); hud('Wrong note', false); }
+  } else {
+    // play click feedback only
+    const o = actx.createOscillator(), g = actx.createGain(); o.type='sine'; o.frequency.value = 440 * Math.pow(2,(m-69)/12); g.gain.value=0.08; o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+0.25);
+  }
+}
+
+/* =========================
+   UI wiring & file load
+   ========================= */
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Create OSMD
+  osmd = createOSMD();
+
+  // instrument grid initial
+  // buildInstrumentGrid done earlier, but we ensure buttons exist to select via code
+  const instGrid = document.getElementById('instrumentGrid');
+  // if not built (older path), fallback
+  if(!instGrid.querySelector('.instrument')) { // create simple grid as fallback (shouldn't happen)
+    instruments.forEach(inst=>{
+      const d = document.createElement('div'); d.className='instrument'+(inst==='piano'?' active':''); d.dataset.inst=inst; d.innerHTML=`<div class="icon">🎵</div><div>${inst}</div>`; d.addEventListener('click', ()=>selectInstrument(inst,d)); instGrid.appendChild(d);
+    });
+  }
+
+  // File input
+  document.getElementById('file').addEventListener('change', e=>{
+    const f = e.target.files?.[0]; if(!f) return;
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      try{
+        if(f.name.toLowerCase().endsWith('.mxl')) await osmd.load(new Uint8Array(ev.target.result)); else await osmd.load(ev.target.result);
+        await osmd.render();
+        // build steps
+        buildSteps(); gotoStep(0);
+        hud('Score loaded', true);
+      }catch(err){ console.error(err); alert('Failed to load MusicXML/MXL.'); }
+    };
+    if(f.name.toLowerCase().endsWith('.mxl')) reader.readAsArrayBuffer(f); else reader.readAsText(f);
+  });
+
+  // mode toggle
+  const toggle = document.getElementById('modeToggle');
+  toggle.addEventListener('click', ()=>{
+    toggle.classList.toggle('active');
+    listenMode = !toggle.classList.contains('active'); // active = Train
+    hud(listenMode ? 'Listen Mode' : 'Train Mode', true);
+  });
+
+  // bpm
+  const bpmRange = document.getElementById('bpmRange'); const bpmVal = document.getElementById('bpmVal');
+  bpmRange.addEventListener('input', e=>{ bpm = parseInt(e.target.value,10); bpmVal.textContent = bpm; });
+
+  // transport
+  document.getElementById('playBtn').addEventListener('click', ()=>{ if(listenMode) startListen(); else hud('Train mode: play highlighted notes',true);});
+  document.getElementById('pauseBtn').addEventListener('click', ()=> pauseAuto());
+  document.getElementById('stopBtn').addEventListener('click', ()=>{ stopAuto(); gotoStep(0); });
+
+  // tuner toggle
+  document.getElementById('toggleTuner').addEventListener('click', ()=>{ toggleTuner(true); });
+  document.getElementById('tuneClose').addEventListener('click', ()=>{ toggleTuner(false); });
+
+  // tune tolerance slider
+  const tol = document.getElementById('tuneTol'), tolVal = document.getElementById('tuneTolVal');
+  tol.addEventListener('input', e=>{ tuneTolerance = parseInt(e.target.value,10); tolVal.textContent = tuneTolerance+'¢'; });
+
+  // initialize MIDI
+  initMIDI();
+
+  // default: select piano (already)
+  renderPiano();
+  // build instrument grid event handlers (attached earlier when grid built)
+  document.querySelectorAll('.instrument').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      selectInstrument(el.dataset.inst, el);
+    });
+  });
 });
+
+/* =========================
+   Tuner open/close
+   ========================= */
+function toggleTuner(open){
+  const el = document.getElementById('tunerPanel');
+  if(open){
+    el.style.display='block'; startMic(); tunerOpen=true;
+  } else { el.style.display='none'; stopMic(); tunerOpen=false; }
+}
+
+/* =========================
+   start/stop mic used earlier
+   ========================= */
+function startMic(){ if(analyser) return; ensureCtx(); startMicInternal(); }
+async function startMicInternal(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    micStream = stream;
+    const src = actx.createMediaStreamSource(stream);
+    analyser = actx.createAnalyser(); analyser.fftSize = 2048;
+    src.connect(analyser);
+    runPitchLoop();
+    hud('Mic started', true);
+  }catch(e){ console.warn(e); hud('Mic blocked', false); }
+}
+
+/* =========================
+   Helper: play small beep (already used)
+   ========================= */
+function smallBeep(){ try{ ensureCtx(); const o=actx.createOscillator(), g=actx.createGain(); o.type='sine'; o.frequency.value=220; g.gain.value=0.12; o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+0.12); }catch(e){} }
+
 </script>
 </body>
 </html>
